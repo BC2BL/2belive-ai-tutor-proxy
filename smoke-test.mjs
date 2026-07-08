@@ -329,5 +329,42 @@ res = mockRes();
 await clearHistory({ method: 'POST', headers: { 'x-admin-secret': 'secret123' }, body: { lesson_id: 'jp-starter-01' } }, res);
 check('clear-history: missing student_id -> 400', res.statusCode === 400 && res.body.error === 'bad_student_id');
 
+// ---------- Reset-daily admin endpoint ----------
+
+const { default: resetDaily } = await import('./api/admin/reset-daily.js');
+
+// 34. Unauthorized without secret
+res = mockRes();
+await resetDaily({ method: 'POST', headers: {}, body: { student_id: 'stu-daily-reset' } }, res);
+check('reset-daily: unauthorized without secret', res.statusCode === 401);
+
+// 35. Drive a student to the daily cap, confirm they're blocked, reset, confirm unblocked.
+res = mockRes();
+await grant({ method: 'POST', headers: { 'x-admin-secret': 'secret123' }, body: { target: 'student', id: 'stu-daily-reset', amount: 100 } }, res);
+check('reset-daily: setup grant succeeds', res.statusCode === 200, JSON.stringify(res.body));
+
+const dailyCapForTest = 2; // matches DAILY_CAP=2 set for this test run
+for (let i = 0; i < dailyCapForTest; i++) {
+  res = mockRes();
+  await tutor({ method: 'POST', body: { student_id: 'stu-daily-reset', lesson_id: 'jp-starter-01', message: `msg ${i}` } }, res);
+  check(`reset-daily: setup message ${i + 1} ok`, res.statusCode === 200, JSON.stringify(res.body));
+}
+res = mockRes();
+await tutor({ method: 'POST', body: { student_id: 'stu-daily-reset', lesson_id: 'jp-starter-01', message: 'one too many' } }, res);
+check('reset-daily: capped student blocked (429) before reset', res.statusCode === 429, JSON.stringify(res.body));
+
+res = mockRes();
+await resetDaily({ method: 'POST', headers: { 'x-admin-secret': 'secret123' }, body: { student_id: 'stu-daily-reset' } }, res);
+check('reset-daily: succeeds with correct secret', res.statusCode === 200 && res.body.ok === true, JSON.stringify(res.body));
+
+res = mockRes();
+await tutor({ method: 'POST', body: { student_id: 'stu-daily-reset', lesson_id: 'jp-starter-01', message: 'unblocked now' } }, res);
+check('reset-daily: student unblocked immediately after reset', res.statusCode === 200, JSON.stringify(res.body));
+
+// 36. Validates required field
+res = mockRes();
+await resetDaily({ method: 'POST', headers: { 'x-admin-secret': 'secret123' }, body: {} }, res);
+check('reset-daily: missing student_id -> 400', res.statusCode === 400 && res.body.error === 'bad_student_id');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
