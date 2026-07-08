@@ -29,7 +29,9 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'missing_lesson_id' });
     }
     const history = await store.getHistory(studentId, lessonId);
-    return res.status(200).json({ history });
+    const progress = await store.getProgress(studentId);
+    const masteredWords = progress.masteredWords[lessonId] || [];
+    return res.status(200).json({ history, mastered_words: masteredWords });
   } catch (err) {
     console.error('History fetch error:', err);
     return res.status(500).json({ error: 'internal_error' });

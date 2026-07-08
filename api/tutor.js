@@ -12,7 +12,7 @@
 import { config, resolveModelAlias } from '../lib/config.js';
 import { store } from '../lib/store.js';
 import { getLesson } from '../lib/lessons.js';
-import { buildSystemPrompt, filterInput, sanitizeHistory } from '../lib/guardrails.js';
+import { buildSystemPrompt, filterInput, sanitizeHistory, extractMastery } from '../lib/guardrails.js';
 
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', config.allowedOrigin);
@@ -101,6 +101,13 @@ export default async function handler(req, res) {
       return res.status(502).json({ error: 'ai_unavailable' });
     }
 
+    // Strip the invisible [[MASTERED: ...]] marker (if present) from the
+    // reply before the learner ever sees or hears it, and validate any
+    // named words against this lesson's actual vocabulary so a malformed
+    // or hallucinated entry can't reach the learner's progress record.
+    const { cleanReply, masteredWords } = extractMastery(reply, lesson);
+    const allMasteredForLesson = await store.addMasteredWords(student_id, lesson_id, masteredWords);
+
     // Record this successful exchange for future progress-based encouragement
     // and for resuming the conversation on a future visit. Strip the
     // "[Spoken practice attempt]" tag before storing — that's an internal
@@ -108,16 +115,17 @@ export default async function handler(req, res) {
     // in their own chat bubble when they return to this lesson later.
     const updatedProgress = await store.recordProgress(student_id, lesson_id);
     const displayMessage = message.replace(/^\[Spoken practice attempt\]\s*/, '');
-    await store.appendHistory(student_id, lesson_id, displayMessage, reply);
+    await store.appendHistory(student_id, lesson_id, displayMessage, cleanReply);
 
     return res.status(200).json({
-      reply,
+      reply: cleanReply,
       credits_remaining: credit.balance,
       credit_source: credit.source,
       daily_used: daily.used,
       daily_cap: daily.cap,
       model_used: model,
       progress: updatedProgress,
+      mastered_words: allMasteredForLesson,
     });
   } catch (err) {
     console.error('Handler error:', err);
