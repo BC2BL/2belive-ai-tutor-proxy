@@ -1,13 +1,18 @@
-// api/admin/grant.js — manually add credits (pre-Stripe stopgap + org pool setup)
+// api/admin/grant.js — manually add credits (pre-Stripe stopgap + org pool setup),
+// or reset a student's balance back to the configured starting amount.
 //
 // POST /api/admin/grant
 // Headers: { "x-admin-secret": ADMIN_SECRET }
-// Body: { target: "student"|"org", id, amount }
+// Body: { target: "student"|"org"|"reset", id, amount }
+//   amount is required for "student"/"org" (added on top of current balance,
+//   can be negative to deduct). Not used for "reset" — that always snaps
+//   the student back to config.initialCredits, regardless of current balance.
 // Reply: { ok, new_balance }
 //
 // Examples:
-//   Seed an org pool:      { target: "org", id: "kidsrkids-southshore", amount: 5000 }
-//   Top up one learner:    { target: "student", id: "stu_12345", amount: 200 }
+//   Seed an org pool:        { target: "org", id: "kidsrkids-southshore", amount: 5000 }
+//   Top up one learner:      { target: "student", id: "stu_12345", amount: 200 }
+//   Reset a test account:    { target: "reset", id: "local-student" }
 
 import { config } from '../../lib/config.js';
 import { store } from '../../lib/store.js';
@@ -25,8 +30,14 @@ export default async function handler(req, res) {
 
   try {
     const { target, id, amount } = req.body || {};
-    if (!['student', 'org'].includes(target)) return res.status(400).json({ error: 'bad_target' });
+    if (!['student', 'org', 'reset'].includes(target)) return res.status(400).json({ error: 'bad_target' });
     if (!id || typeof id !== 'string') return res.status(400).json({ error: 'bad_id' });
+
+    if (target === 'reset') {
+      const newBalance = await store.resetCredits(id);
+      return res.status(200).json({ ok: true, target, id, new_balance: newBalance });
+    }
+
     const n = parseInt(amount, 10);
     if (!Number.isFinite(n) || n === 0 || Math.abs(n) > 1000000) {
       return res.status(400).json({ error: 'bad_amount' });

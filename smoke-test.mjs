@@ -366,5 +366,35 @@ res = mockRes();
 await resetDaily({ method: 'POST', headers: { 'x-admin-secret': 'secret123' }, body: {} }, res);
 check('reset-daily: missing student_id -> 400', res.statusCode === 400 && res.body.error === 'bad_student_id');
 
+// ---------- Reset-credits (via grant target:"reset") ----------
+
+// 37. Spend down a student's balance, then reset — should snap back to
+//     config.initialCredits (3, per this test run's env), NOT add on top.
+res = mockRes();
+await tutor({ method: 'POST', body: { student_id: 'stu-credit-reset', lesson_id: 'jp-starter-01', message: 'spend one' } }, res);
+check('reset-credits: setup spend succeeds', res.statusCode === 200, JSON.stringify(res.body));
+res = mockRes();
+await credits({ method: 'GET', query: { student_id: 'stu-credit-reset' } }, res);
+check('reset-credits: balance is down to 2 before reset', res.body.credits_remaining === 2, JSON.stringify(res.body));
+
+res = mockRes();
+await grant({ method: 'POST', headers: { 'x-admin-secret': 'secret123' }, body: { target: 'reset', id: 'stu-credit-reset' } }, res);
+check('reset-credits: succeeds with correct secret', res.statusCode === 200 && res.body.ok === true, JSON.stringify(res.body));
+check('reset-credits: reply reports initialCredits as new_balance', res.body.new_balance === 3, JSON.stringify(res.body));
+
+res = mockRes();
+await credits({ method: 'GET', query: { student_id: 'stu-credit-reset' } }, res);
+check('reset-credits: balance snapped back to 3, not added on top', res.body.credits_remaining === 3, JSON.stringify(res.body));
+
+// 38. Unauthorized without secret still applies to target:"reset"
+res = mockRes();
+await grant({ method: 'POST', headers: {}, body: { target: 'reset', id: 'stu-credit-reset' } }, res);
+check('reset-credits: unauthorized without secret', res.statusCode === 401);
+
+// 39. bad target still rejected
+res = mockRes();
+await grant({ method: 'POST', headers: { 'x-admin-secret': 'secret123' }, body: { target: 'bogus', id: 'stu-credit-reset' } }, res);
+check('reset-credits: invalid target rejected', res.statusCode === 400 && res.body.error === 'bad_target');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
