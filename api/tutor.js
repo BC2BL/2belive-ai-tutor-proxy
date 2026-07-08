@@ -101,8 +101,14 @@ export default async function handler(req, res) {
       return res.status(502).json({ error: 'ai_unavailable' });
     }
 
-    // Record this successful exchange for future progress-based encouragement.
+    // Record this successful exchange for future progress-based encouragement
+    // and for resuming the conversation on a future visit. Strip the
+    // "[Spoken practice attempt]" tag before storing — that's an internal
+    // signal for Sensei, not something the learner should see echoed back
+    // in their own chat bubble when they return to this lesson later.
     const updatedProgress = await store.recordProgress(student_id, lesson_id);
+    const displayMessage = message.replace(/^\[Spoken practice attempt\]\s*/, '');
+    await store.appendHistory(student_id, lesson_id, displayMessage, reply);
 
     return res.status(200).json({
       reply,
