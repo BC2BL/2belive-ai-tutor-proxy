@@ -15,6 +15,8 @@ export default async function handler(req, res) {
     storage: store.usingRedis() ? 'upstash-redis' : 'in-memory (dev only — configure Upstash for production)',
     model: config.model,
     keyConfigured: !!config.anthropicApiKey,
+    elevenLabsConfigured: !!(config.elevenLabsApiKey && config.elevenLabsVoiceId),
+    elevenLabsModel: config.elevenLabsModel,
     time: new Date().toISOString(),
   });
 }
