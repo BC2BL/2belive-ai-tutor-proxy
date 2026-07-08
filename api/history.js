@@ -6,6 +6,7 @@
 
 import { config } from '../lib/config.js';
 import { store } from '../lib/store.js';
+import { getLessonVersion } from '../lib/lessons.js';
 
 function cors(res) {
   res.setHeader('Access-Control-Allow-Origin', config.allowedOrigin);
@@ -28,7 +29,7 @@ export default async function handler(req, res) {
     if (!lessonId) {
       return res.status(400).json({ error: 'missing_lesson_id' });
     }
-    const history = await store.getHistory(studentId, lessonId);
+    const history = await store.getHistory(studentId, lessonId, getLessonVersion(lessonId));
     const progress = await store.getProgress(studentId);
     const masteredWords = progress.masteredWords[lessonId] || [];
     return res.status(200).json({ history, mastered_words: masteredWords });

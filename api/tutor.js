@@ -11,7 +11,7 @@
 
 import { config, resolveModelAlias } from '../lib/config.js';
 import { store } from '../lib/store.js';
-import { getLesson } from '../lib/lessons.js';
+import { getLesson, getLessonVersion } from '../lib/lessons.js';
 import { buildSystemPrompt, filterInput, sanitizeHistory, extractMastery } from '../lib/guardrails.js';
 
 function cors(res) {
@@ -61,7 +61,7 @@ export default async function handler(req, res) {
 
     // --- Build request ---
     const progress = await store.getProgress(student_id);
-    const system = buildSystemPrompt(lesson, student_name, progress);
+    const system = buildSystemPrompt(lesson, student_name, progress, lesson_id);
     const messages = [...sanitizeHistory(history), { role: 'user', content: message }];
     const model = lesson.model ? resolveModelAlias(lesson.model) : config.model;
 
@@ -115,7 +115,7 @@ export default async function handler(req, res) {
     // in their own chat bubble when they return to this lesson later.
     const updatedProgress = await store.recordProgress(student_id, lesson_id);
     const displayMessage = message.replace(/^\[Spoken practice attempt\]\s*/, '');
-    await store.appendHistory(student_id, lesson_id, displayMessage, cleanReply);
+    await store.appendHistory(student_id, lesson_id, displayMessage, cleanReply, getLessonVersion(lesson_id));
 
     return res.status(200).json({
       reply: cleanReply,
