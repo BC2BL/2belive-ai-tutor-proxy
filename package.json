@@ -1,0 +1,10 @@
+{
+  "name": "2belive-ai-tutor-proxy",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Server-side proxy for the 2BeLive AI Tutor SCORM packages: guardrails, credit ledger, Anthropic API gateway.",
+  "engines": {
+    "node": ">=18"
+  }
+}

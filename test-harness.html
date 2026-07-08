@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Tutor Proxy - Test Harness</title>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&amp;display=swap" rel="stylesheet">
+<style>
+  :root { --navy:#1B2A4A; --orange:#F7941D; --border:#D9DEE8; --bg:#F5F7FA; --muted:#6B7A99; }
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:'Roboto',sans-serif; background:var(--bg); color:var(--navy); padding:20px 14px; }
+  .wrap { max-width:680px; margin:0 auto; }
+  h1 { font-size:20px; margin-bottom:12px; }
+  .card { background:#fff; border:1px solid var(--border); border-radius:10px; padding:14px; margin-bottom:12px; }
+  label { font-size:12px; color:var(--muted); display:block; margin:6px 0 2px; }
+  input, select { width:100%; font-family:inherit; font-size:14px; padding:8px; border:1px solid var(--border); border-radius:8px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  #chat { min-height:200px; max-height:380px; overflow-y:auto; display:flex; flex-direction:column; gap:8px; padding:10px 0; }
+  .msg { max-width:85%; padding:9px 12px; border-radius:12px; font-size:14px; line-height:1.45; white-space:pre-wrap; }
+  .msg.user { align-self:flex-end; background:var(--navy); color:#fff; border-bottom-right-radius:4px; }
+  .msg.ai { align-self:flex-start; background:#EEF2F8; border-bottom-left-radius:4px; }
+  .msg.sys { align-self:center; background:#FDF6E7; color:#8a6d1a; font-size:12px; }
+  .inrow { display:flex; gap:8px; margin-top:8px; }
+  .inrow input { flex:1; }
+  button { font-family:inherit; font-size:14px; font-weight:500; border:none; border-radius:8px; padding:10px 16px; cursor:pointer; background:var(--orange); color:#fff; }
+  button:disabled { opacity:.5; }
+  #status { font-size:12px; color:var(--muted); margin-top:6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>AI Tutor Proxy - Test Harness</h1>
+  <div class="card">
+    <label>Proxy base URL</label>
+    <input id="baseUrl" placeholder="https://your-proxy.vercel.app" value="">
+    <div class="grid">
+      <div><label>student_id</label><input id="sid" value="test-student-001"></div>
+      <div><label>student_name</label><input id="sname" value="Bing"></div>
+      <div><label>org_id (optional)</label><input id="oid" value=""></div>
+      <div><label>lesson_id</label>
+        <select id="lid">
+          <option value="jp-starter-01">jp-starter-01 - Greetings</option>
+          <option value="jp-starter-02">jp-starter-02 - Numbers and Time</option>
+          <option value="jp-starter-03">jp-starter-03 - Restaurant</option>
+        </select>
+      </div>
+    </div>
+  </div>
+  <div class="card">
+    <div id="chat"><div class="msg sys">Set the proxy URL and say hello to Sensei. Try off-topic questions and quiz-dodging to red-team the guardrails.</div></div>
+    <div class="inrow">
+      <input id="msg" placeholder="Type a message..." maxlength="500">
+      <button id="send">Send</button>
+    </div>
+    <div id="status"></div>
+  </div>
+</div>
+<script>
+(function () {
+  'use strict';
+  var history = [];
+  var chat = document.getElementById('chat');
+  var statusEl = document.getElementById('status');
+  var btn = document.getElementById('send');
+  var msgIn = document.getElementById('msg');
+
+  function add(cls, text) {
+    var d = document.createElement('div');
+    d.className = 'msg ' + cls;
+    d.textContent = text;
+    chat.appendChild(d);
+    chat.scrollTop = chat.scrollHeight;
+  }
+
+  function send() {
+    var base = document.getElementById('baseUrl').value.trim().replace(/\/$/, '');
+    var text = msgIn.value.trim();
+    if (!base || !text) return;
+    add('user', text);
+    msgIn.value = '';
+    btn.disabled = true;
+    var body = {
+      student_id: document.getElementById('sid').value.trim(),
+      student_name: document.getElementById('sname').value.trim(),
+      lesson_id: document.getElementById('lid').value,
+      message: text,
+      history: history.slice(-12)
+    };
+    var oid = document.getElementById('oid').value.trim();
+    if (oid) body.org_id = oid;
+
+    fetch(base + '/api/tutor', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    }).then(function (r) {
+      return r.json().then(function (data) { return { status: r.status, data: data }; });
+    }).then(function (out) {
+      btn.disabled = false;
+      if (out.status === 200) {
+        add('ai', out.data.reply);
+        history.push({ role: 'user', content: text });
+        history.push({ role: 'assistant', content: out.data.reply });
+        statusEl.textContent = 'Credits: ' + out.data.credits_remaining +
+          ' (' + out.data.credit_source + ') | Daily: ' + out.data.daily_used + '/' + out.data.daily_cap +
+          ' | Model: ' + out.data.model_used;
+      } else {
+        add('sys', 'HTTP ' + out.status + ': ' + JSON.stringify(out.data));
+      }
+    }).catch(function (e) {
+      btn.disabled = false;
+      add('sys', 'Request failed: ' + e.message);
+    });
+  }
+
+  btn.addEventListener('click', send);
+  msgIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') send(); });
+})();
+</script>
+</body>
+</html>
