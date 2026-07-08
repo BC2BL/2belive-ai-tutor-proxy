@@ -60,7 +60,8 @@ export default async function handler(req, res) {
     }
 
     // --- Build request ---
-    const system = buildSystemPrompt(lesson, student_name);
+    const progress = await store.getProgress(student_id);
+    const system = buildSystemPrompt(lesson, student_name, progress);
     const messages = [...sanitizeHistory(history), { role: 'user', content: message }];
     const model = lesson.model ? resolveModelAlias(lesson.model) : config.model;
 
@@ -100,6 +101,9 @@ export default async function handler(req, res) {
       return res.status(502).json({ error: 'ai_unavailable' });
     }
 
+    // Record this successful exchange for future progress-based encouragement.
+    const updatedProgress = await store.recordProgress(student_id, lesson_id);
+
     return res.status(200).json({
       reply,
       credits_remaining: credit.balance,
@@ -107,6 +111,7 @@ export default async function handler(req, res) {
       daily_used: daily.used,
       daily_cap: daily.cap,
       model_used: model,
+      progress: updatedProgress,
     });
   } catch (err) {
     console.error('Handler error:', err);
